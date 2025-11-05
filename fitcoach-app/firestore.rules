@@ -1,0 +1,60 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isCoachOwner(coachId) {
+      return isAuthenticated() && request.auth.uid == coachId;
+    }
+
+    // ==================== COACHES ====================
+    // Coaches can only read/write their own data
+    match /coaches/{coachId} {
+      allow read: if isOwner(coachId);
+      allow create: if isOwner(coachId);
+      allow update: if isOwner(coachId);
+      allow delete: if isOwner(coachId);
+    }
+
+    // ==================== LEADS ====================
+    // Coaches can only access their own leads
+    match /leads/{leadId} {
+      allow read, update: if isAuthenticated() &&
+                             resource.data.coachId == request.auth.uid;
+
+      // Allow create from widget (public)
+      // Note: In production, validate via API key in Cloud Function
+      allow create: if true;
+    }
+
+    // ==================== CONVERSATIONS ====================
+    // Coaches can only access their own conversations
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated() &&
+                    resource.data.coachId == request.auth.uid;
+
+      // Allow write from widget (public)
+      // Note: In production, validate via API key in Cloud Function
+      allow create, update: if true;
+    }
+
+    // ==================== ANALYTICS ====================
+    // Analytics read-only for coaches
+    match /analytics/{eventId} {
+      allow read: if isAuthenticated() &&
+                    resource.data.coachId == request.auth.uid;
+
+      // Only Cloud Functions can write analytics
+      allow write: if false;
+    }
+  }
+}
